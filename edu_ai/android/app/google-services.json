@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "840452215763",
+    "project_id": "eduai-9aed8",
+    "storage_bucket": "eduai-9aed8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:840452215763:android:f34a7ead425db1d3011526",
+        "android_client_info": {
+          "package_name": "com.eduai.edu_ai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "840452215763-nr7tn8kc3jbhs1c0168cun6h536vi7mi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDWJtTIAIhO56zoUG0JmynuAnVbXMaLyN0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "840452215763-nr7tn8kc3jbhs1c0168cun6h536vi7mi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

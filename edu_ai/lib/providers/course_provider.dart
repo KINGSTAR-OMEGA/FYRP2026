@@ -44,7 +44,7 @@ class CourseProvider extends ChangeNotifier {
 
   Future<void> deleteCourse(String courseId) async {
     _courses.removeWhere((c) => c.id == courseId);
-    await _storage.saveCourses(_courses);
+    await _storage.deleteCourse(courseId);
     notifyListeners();
   }
 

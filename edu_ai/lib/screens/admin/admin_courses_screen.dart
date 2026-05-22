@@ -82,7 +82,7 @@ class AdminCoursesScreen extends StatelessWidget {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                   itemCount: courses.length,
                   itemBuilder: (context, i) => _CourseCard(
                     course: courses[i],
@@ -254,7 +254,15 @@ class _CourseCard extends StatelessWidget {
   }
 
   void _handleAction(BuildContext context, String action) {
-    if (action == 'delete') {
+    if (action == 'edit') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              AdminCreateCourseScreen(existingCourse: course),
+        ),
+      );
+    } else if (action == 'delete') {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(

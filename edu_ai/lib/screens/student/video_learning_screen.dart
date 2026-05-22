@@ -9,8 +9,12 @@ import '../../models/course_model.dart';
 import '../../models/lesson_model.dart';
 import '../../models/phase_model.dart';
 import '../../models/progress_model.dart';
+import '../../models/question_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/memory_provider.dart';
 import '../../providers/progress_provider.dart';
+import '../../services/ai_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/theme.dart';
 import '../../widgets/student/ai_chat_panel.dart';
 import '../../widgets/student/phase_question_overlay.dart';
@@ -36,9 +40,16 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
   bool _videoInitialized = false;
   bool _videoError = false;
 
-  PhaseModel? _activePhase; // phase currently showing questions
-  final Set<String> _shownPhases = {}; // phases already triggered
+  PhaseModel? _activePhase;
+  final Set<String> _shownPhases = {};
   bool _overlayVisible = false;
+
+  // AI question generation state
+  final AiService _ai = AiService();
+  final StorageService _storage = StorageService();
+  bool _generatingQuestions = false;
+  List<QuestionModel>? _pendingAiQuestions;
+  String _lastPerformanceInsight = '';
 
   late String _userId;
   late TabController _tabCtrl;
@@ -48,6 +59,12 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
     super.initState();
     _userId = context.read<AuthProvider>().currentUser!.id;
     _tabCtrl = TabController(length: 2, vsync: this);
+
+    // Load this student's memory when the screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<MemoryProvider>().loadMemory(_userId);
+    });
+
     _initVideo();
   }
 
@@ -59,7 +76,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
     }
 
     try {
-      // Support both regular file paths and Android content:// URIs
       if (path.startsWith('content://')) {
         _videoCtrl = VideoPlayerController.contentUri(Uri.parse(path));
       } else {
@@ -72,7 +88,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
       }
       await _videoCtrl!.initialize();
 
-      // Restore last position
       if (!mounted) return;
       final progress = context.read<ProgressProvider>();
       final lp = progress.getLessonProgress(
@@ -82,7 +97,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
             Duration(milliseconds: (lp.watchedSeconds * 1000).toInt()));
       }
 
-      // Restore completed phases
       _shownPhases.addAll(lp.completedPhaseIds);
 
       _chewieCtrl = ChewieController(
@@ -113,7 +127,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
 
     final pos = _videoCtrl!.value.position.inMilliseconds / 1000.0;
 
-    // Save position periodically
     context.read<ProgressProvider>().updateWatchPosition(
           _userId,
           widget.course.id,
@@ -121,7 +134,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
           pos,
         );
 
-    // Check phases
     for (final phase in widget.lesson.phases) {
       if (!_shownPhases.contains(phase.id) && pos >= phase.endTimeSeconds) {
         _triggerPhase(phase);
@@ -129,18 +141,61 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
       }
     }
 
-    // Auto-complete if video ends
     final duration = _videoCtrl!.value.duration.inSeconds.toDouble();
     if (duration > 0 && pos >= duration - 1.0) {
       _completeLesson();
     }
   }
 
-  void _triggerPhase(PhaseModel phase) {
+  Future<void> _triggerPhase(PhaseModel phase) async {
     _videoCtrl?.pause();
+
+    // Capture memory before any await to avoid BuildContext-across-async-gap lint
+    final memory = context.read<MemoryProvider>().getMemory(_userId);
+
+    // Check SharedPreferences cache first — instant load, no spinner
+    final cached = await _storage.loadCachedAiQuestions(
+        widget.lesson.id, phase.id, _userId);
+
+    if (cached != null && cached.isNotEmpty) {
+      setState(() {
+        _activePhase = phase;
+        _pendingAiQuestions = cached;
+        _generatingQuestions = false;
+        _overlayVisible = true;
+      });
+      return;
+    }
+
+    // Show overlay with loading spinner while Grok generates questions
     setState(() {
       _activePhase = phase;
+      _pendingAiQuestions = null;
+      _generatingQuestions = true;
       _overlayVisible = true;
+    });
+
+    final duration = _videoCtrl?.value.duration.inSeconds.toDouble() ?? 600.0;
+
+    final generated = await _ai.generatePhaseQuestions(
+      transcription: widget.lesson.transcription,
+      phaseTitle: phase.title,
+      videoDurationSeconds: duration,
+      lessonTitle: widget.lesson.title,
+      studentMemory: memory,
+    );
+
+    if (!mounted) return;
+
+    // Cache successful generations
+    if (generated != null && generated.isNotEmpty) {
+      await _storage.saveCachedAiQuestions(
+          widget.lesson.id, phase.id, _userId, generated);
+    }
+
+    setState(() {
+      _generatingQuestions = false;
+      _pendingAiQuestions = generated; // null → overlay falls back to admin Qs
     });
   }
 
@@ -149,6 +204,7 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
     setState(() {
       _overlayVisible = false;
       _activePhase = null;
+      _pendingAiQuestions = null;
     });
     _videoCtrl?.play();
   }
@@ -165,6 +221,31 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
             completedAt: DateTime.now(),
           ),
         );
+
+    // Fire-and-forget: fetch AI performance insight for the summary card
+    if (_activePhase != null) {
+      _fetchPerformanceInsight(
+        phaseTitle: _activePhase!.title,
+        correct: correct,
+        total: total,
+      );
+    }
+  }
+
+  Future<void> _fetchPerformanceInsight({
+    required String phaseTitle,
+    required int correct,
+    required int total,
+  }) async {
+    final memory = context.read<MemoryProvider>().getMemory(_userId);
+    final insight = await _ai.analyzePerformance(
+      memory: memory,
+      recentPhaseTitle: phaseTitle,
+      recentCorrect: correct,
+      recentTotal: total,
+    );
+    if (!mounted) return;
+    setState(() => _lastPerformanceInsight = insight);
   }
 
   void _completeLesson() {
@@ -223,7 +304,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
                 ],
               ),
             ),
-            // Phase completion dots
             if (widget.lesson.phases.isNotEmpty)
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -245,14 +325,12 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
       ),
       body: Stack(
         children: [
-          // Main content
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
               if (isWide) {
                 return Row(
                   children: [
-                    // Video side (65%)
                     Expanded(
                       flex: 65,
                       child: _VideoSide(
@@ -264,7 +342,6 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
                         shownPhases: _shownPhases,
                       ),
                     ),
-                    // AI Chat side (35%)
                     SizedBox(
                       width: 360,
                       child: AiChatPanel(
@@ -277,73 +354,83 @@ class _VideoLearningScreenState extends State<VideoLearningScreen>
                   ],
                 );
               }
-              // Narrow (mobile): video on top, tabbed panel below
-              return Column(
-                children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: _VideoPlayer(
-                      videoInitialized: _videoInitialized,
-                      videoError: _videoError,
-                      chewieCtrl: _chewieCtrl,
+              return SafeArea(
+                top: false,
+                child: Column(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: _VideoPlayer(
+                        videoInitialized: _videoInitialized,
+                        videoError: _videoError,
+                        chewieCtrl: _chewieCtrl,
+                      ),
                     ),
-                  ),
-                  // Tab bar
-                  Container(
-                    color: AppColors.bg,
-                    child: TabBar(
-                      controller: _tabCtrl,
-                      labelStyle: GoogleFonts.outfit(
-                          fontSize: 13, fontWeight: FontWeight.w600),
-                      unselectedLabelStyle:
-                          GoogleFonts.outfit(fontSize: 13),
-                      labelColor: AppColors.primary,
-                      unselectedLabelColor: AppColors.textMed,
-                      indicatorColor: AppColors.primary,
-                      indicatorWeight: 2,
-                      tabs: const [
-                        Tab(text: 'Lesson'),
-                        Tab(text: 'AI Chat'),
-                      ],
+                    Container(
+                      color: AppColors.bg,
+                      child: TabBar(
+                        controller: _tabCtrl,
+                        labelStyle: GoogleFonts.outfit(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                        unselectedLabelStyle: GoogleFonts.outfit(fontSize: 13),
+                        labelColor: AppColors.primary,
+                        unselectedLabelColor: AppColors.textMed,
+                        indicatorColor: AppColors.primary,
+                        indicatorWeight: 2,
+                        tabs: const [
+                          Tab(text: 'Lesson'),
+                          Tab(text: 'AI Chat'),
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabCtrl,
-                      children: [
-                        // Tab 1 — lesson info + phase list
-                        _LessonInfoPanel(
-                          lesson: widget.lesson,
-                          shownPhases: _shownPhases,
-                        ),
-                        // Tab 2 — AI chat
-                        AiChatPanel(
-                          courseId: widget.course.id,
-                          lessonId: widget.lesson.id,
-                          transcription: widget.lesson.transcription,
-                          initialMessages: chatHistory,
-                        ),
-                      ],
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabCtrl,
+                        children: [
+                          _LessonInfoPanel(
+                            lesson: widget.lesson,
+                            shownPhases: _shownPhases,
+                          ),
+                          AiChatPanel(
+                            courseId: widget.course.id,
+                            lessonId: widget.lesson.id,
+                            transcription: widget.lesson.transcription,
+                            initialMessages: chatHistory,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               );
             },
           ),
 
-          // Phase question overlay
+          // Phase question overlay — with AI loading + generated questions
           if (_overlayVisible && _activePhase != null)
             PhaseQuestionOverlay(
               phase: _activePhase!,
+              aiQuestions: _pendingAiQuestions,
+              isLoadingQuestions: _generatingQuestions,
+              performanceInsight: _lastPerformanceInsight,
               onComplete: _onPhaseComplete,
               onResults: (c, t) =>
                   _onPhaseResults(_activePhase!.id, c, t),
+              onAnswered: (topic, wasCorrect) {
+                context.read<MemoryProvider>().recordAnswer(
+                      studentId: _userId,
+                      topic: topic,
+                      wasCorrect: wasCorrect,
+                    );
+              },
             ).animate().fadeIn(duration: 250.ms),
         ],
       ),
     );
   }
 }
+
+// ─── Supporting widgets (unchanged from original) ─────────────────────────────
 
 class _VideoSide extends StatelessWidget {
   final bool videoInitialized;
@@ -366,7 +453,6 @@ class _VideoSide extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Video player - 16:9 ratio
         AspectRatio(
           aspectRatio: 16 / 9,
           child: _VideoPlayer(
@@ -375,16 +461,13 @@ class _VideoSide extends StatelessWidget {
             chewieCtrl: chewieCtrl,
           ),
         ),
-
-        // Phase timeline strip
         if (lesson.phases.isNotEmpty)
           _PhaseTimeline(
             phases: lesson.phases,
             shownPhases: shownPhases,
-            videoDuration: videoCtrl?.value.duration.inSeconds.toDouble() ?? 0,
+            videoDuration:
+                videoCtrl?.value.duration.inSeconds.toDouble() ?? 0,
           ),
-
-        // Lesson info
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -408,7 +491,8 @@ class _VideoSide extends StatelessWidget {
                     const SizedBox(width: 8),
                     _InfoChip(
                         icon: Icons.check_circle_outline,
-                        label: '${shownPhases.length}/${lesson.phases.length} completed'),
+                        label:
+                            '${shownPhases.length}/${lesson.phases.length} completed'),
                   ],
                 ),
                 if (lesson.phases.isNotEmpty) ...[
@@ -461,17 +545,13 @@ class _VideoPlayer extends StatelessWidget {
               const Icon(Icons.video_file_outlined,
                   color: Colors.white54, size: 48),
               const SizedBox(height: 12),
-              Text(
-                'Video not available',
-                style: GoogleFonts.outfit(
-                    color: Colors.white70, fontSize: 15),
-              ),
+              Text('Video not available',
+                  style:
+                      GoogleFonts.outfit(color: Colors.white70, fontSize: 15)),
               const SizedBox(height: 4),
-              Text(
-                'The video file could not be found.',
-                style: GoogleFonts.outfit(
-                    color: Colors.white38, fontSize: 12),
-              ),
+              Text('The video file could not be found.',
+                  style: GoogleFonts.outfit(
+                      color: Colors.white38, fontSize: 12)),
             ],
           ),
         ),
@@ -521,16 +601,13 @@ class _PhaseTimeline extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
-            'Phases: ',
-            style: GoogleFonts.outfit(
-                fontSize: 11, color: AppColors.textLow),
-          ),
+          Text('Phases: ',
+              style:
+                  GoogleFonts.outfit(fontSize: 11, color: AppColors.textLow)),
           Expanded(
             child: Stack(
               alignment: Alignment.centerLeft,
               children: [
-                // Background line
                 Container(
                   height: 3,
                   decoration: BoxDecoration(
@@ -538,12 +615,10 @@ class _PhaseTimeline extends StatelessWidget {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                // Phase markers — use Align so position is relative to Stack width
                 if (videoDuration > 0)
                   ...phases.map((p) {
-                    final frac = (p.endTimeSeconds / videoDuration)
-                        .clamp(0.02, 0.98);
-                    // Align.x maps [-1, 1] to [left, right]
+                    final frac =
+                        (p.endTimeSeconds / videoDuration).clamp(0.02, 0.98);
                     return Align(
                       alignment: Alignment(frac * 2 - 1, 0),
                       child: Tooltip(
@@ -557,7 +632,8 @@ class _PhaseTimeline extends StatelessWidget {
                             color: shownPhases.contains(p.id)
                                 ? AppColors.success
                                 : AppColors.primary,
-                            border: Border.all(color: Colors.white, width: 2),
+                            border:
+                                Border.all(color: Colors.white, width: 2),
                             boxShadow: [
                               BoxShadow(
                                 color: (shownPhases.contains(p.id)
@@ -600,40 +676,34 @@ class _PhaseInfoRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              phase.title,
+            child: Text(phase.title,
+                style: GoogleFonts.outfit(
+                    fontSize: 13, color: AppColors.textMed)),
+          ),
+          Text('${phase.endTimeSeconds.toStringAsFixed(0)}s',
               style: GoogleFonts.outfit(
-                  fontSize: 13, color: AppColors.textMed),
-            ),
-          ),
-          Text(
-            '${phase.endTimeSeconds.toStringAsFixed(0)}s',
-            style: GoogleFonts.outfit(
-                fontSize: 11, color: AppColors.textLow),
-          ),
+                  fontSize: 11, color: AppColors.textLow)),
           const SizedBox(width: 8),
-          Text(
-            '${phase.questions.length} Q',
-            style: GoogleFonts.outfit(
-                fontSize: 11, color: AppColors.textLow),
-          ),
+          Text('${phase.questions.length} Q',
+              style: GoogleFonts.outfit(
+                  fontSize: 11, color: AppColors.textLow)),
         ],
       ),
     );
   }
 }
 
-// Mobile "Lesson" tab — shows lesson title, chips, and phase list
 class _LessonInfoPanel extends StatelessWidget {
   final LessonModel lesson;
   final Set<String> shownPhases;
 
-  const _LessonInfoPanel({required this.lesson, required this.shownPhases});
+  const _LessonInfoPanel(
+      {required this.lesson, required this.shownPhases});
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -654,24 +724,21 @@ class _LessonInfoPanel extends StatelessWidget {
                   label: '${lesson.phases.length} phases'),
               _InfoChip(
                   icon: Icons.check_circle_outline,
-                  label:
-                      '${shownPhases.length}/${lesson.phases.length} done'),
+                  label: '${shownPhases.length}/${lesson.phases.length} done'),
             ],
           ),
           if (lesson.phases.isNotEmpty) ...[
             const SizedBox(height: 20),
-            Text(
-              'Phases',
-              style: GoogleFonts.outfit(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textHigh,
-              ),
-            ),
+            Text('Phases',
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textHigh,
+                )),
             const SizedBox(height: 8),
             ...lesson.phases.map(
-              (p) => _PhaseInfoRow(
-                  phase: p, done: shownPhases.contains(p.id)),
+              (p) =>
+                  _PhaseInfoRow(phase: p, done: shownPhases.contains(p.id)),
             ),
           ],
         ],
@@ -700,10 +767,9 @@ class _InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: AppColors.textLow),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textMed),
-          ),
+          Text(label,
+              style: GoogleFonts.outfit(
+                  fontSize: 12, color: AppColors.textMed)),
         ],
       ),
     );

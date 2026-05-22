@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/course_provider.dart';
 import '../../utils/theme.dart';
 import '../role_selection_screen.dart';
 import 'student_dashboard_screen.dart';
@@ -22,6 +23,14 @@ class _StudentShellState extends State<StudentShell> {
     StudentCoursesScreen(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Load courses for the student view — same as AdminShell does.
+    // Without this, courses are empty until an admin session has run first.
+    context.read<CourseProvider>().loadCourses();
+  }
+
   final _navItems = const [
     (icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
     (icon: Icons.explore_outlined, activeIcon: Icons.explore, label: 'Courses'),
@@ -29,7 +38,12 @@ class _StudentShellState extends State<StudentShell> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().currentUser!;
+    final user = context.watch<AuthProvider>().currentUser;
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     final isWide = MediaQuery.of(context).size.width > 900;
 
     if (isWide) {
@@ -54,7 +68,11 @@ class _StudentShellState extends State<StudentShell> {
     // Mobile: bottom nav + profile sheet
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: _screens[_index],
+      body: SafeArea(
+        bottom: false,
+        top: false,
+        child: _screens[_index],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
@@ -118,9 +136,9 @@ class _StudentShellState extends State<StudentShell> {
     );
   }
 
-  void _logout() {
-    Navigator.of(context).pop(); // close sheet if open
-    context.read<AuthProvider>().logout();
+  Future<void> _logout() async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
@@ -333,7 +351,7 @@ class _ProfileSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          24, 16, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+          24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

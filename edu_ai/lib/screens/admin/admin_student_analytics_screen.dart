@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../../models/course_model.dart';
+import '../../models/lesson_model.dart';
+import '../../models/progress_model.dart';
 import '../../models/user_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../../utils/theme.dart';
@@ -22,21 +26,24 @@ class _AdminStudentAnalyticsScreenState
   @override
   void initState() {
     super.initState();
-    _selected = demoStudents.first;
   }
 
   @override
   Widget build(BuildContext context) {
+    final students = context.watch<AuthProvider>().students;
+    if (_selected == null && students.isNotEmpty) {
+      _selected = students.first;
+    }
     final progress = context.watch<ProgressProvider>();
     final courses = context.watch<CourseProvider>().courses;
 
-    final studentProgress = _selected != null
+    final List<StudentCourseProgress> studentProgress = _selected != null
         ? progress.getAllProgressForStudent(_selected!.id)
         : [];
-    final completedLessons = _selected != null
+    final int completedLessons = _selected != null
         ? progress.getCompletedLessonsCount(_selected!.id)
         : 0;
-    final overallScore = _selected != null
+    final double overallScore = _selected != null
         ? progress.getStudentOverallScore(_selected!.id)
         : 0.0;
 
@@ -63,7 +70,7 @@ class _AdminStudentAnalyticsScreenState
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
-                      children: demoStudents.map((s) {
+                      children: students.map((s) {
                         final selected = _selected?.id == s.id;
                         return GestureDetector(
                           onTap: () => setState(() => _selected = s),
@@ -129,7 +136,7 @@ class _AdminStudentAnalyticsScreenState
                           completedLessons: completedLessons,
                           overallScore: overallScore,
                           studentProgress: studentProgress,
-                          courses: courses,
+                          courses: courses.toList(),
                         ),
                 ),
               ],
@@ -159,7 +166,7 @@ class _AdminStudentAnalyticsScreenState
                         ),
                       ),
                     ),
-                    ...demoStudents.map(
+                    ...students.map(
                       (s) => _StudentListTile(
                         student: s,
                         selected: _selected?.id == s.id,
@@ -178,7 +185,7 @@ class _AdminStudentAnalyticsScreenState
                         completedLessons: completedLessons,
                         overallScore: overallScore,
                         studentProgress: studentProgress,
-                        courses: courses,
+                        courses: courses.toList(),
                       ),
               ),
             ],
@@ -252,8 +259,8 @@ class _StudentDetailPanel extends StatelessWidget {
   final UserModel student;
   final int completedLessons;
   final double overallScore;
-  final List studentProgress;
-  final List courses;
+  final List<StudentCourseProgress> studentProgress;
+  final List<CourseModel> courses;
 
   const _StudentDetailPanel({
     required this.student,
@@ -270,7 +277,7 @@ class _StudentDetailPanel extends StatelessWidget {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
               // Student header
@@ -382,10 +389,7 @@ class _StudentDetailPanel extends StatelessWidget {
                 )
               else
                 ...studentProgress.map((cp) {
-                  final course = courses
-                      .cast<dynamic>()
-                      .where((c) => c.id == cp.courseId)
-                      .firstOrNull;
+                  final course = courses.where((c) => c.id == cp.courseId).firstOrNull;
                   if (course == null) return const SizedBox.shrink();
                   return _CourseProgressCard(
                     courseName: course.title,
@@ -530,8 +534,8 @@ class _SuggestionCard extends StatelessWidget {
 
 class _CourseProgressCard extends StatelessWidget {
   final String courseName;
-  final dynamic lessonProgress;
-  final List lessons;
+  final StudentCourseProgress lessonProgress;
+  final List<LessonModel> lessons;
 
   const _CourseProgressCard({
     required this.courseName,

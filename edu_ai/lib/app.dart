@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/course_provider.dart';
+import 'providers/memory_provider.dart';
 import 'providers/progress_provider.dart';
 import 'screens/splash_screen.dart';
 import 'utils/theme.dart';
@@ -16,6 +17,7 @@ class EduAiApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CourseProvider()),
         ChangeNotifierProvider(create: (_) => ProgressProvider()),
+        ChangeNotifierProvider(create: (_) => MemoryProvider()),
       ],
       child: MaterialApp(
         title: 'EduAI',

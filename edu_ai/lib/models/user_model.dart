@@ -44,8 +44,8 @@ const demoAdmin = UserModel(
 );
 
 const demoStudents = [
-  UserModel(id: 'student_1', name: 'Alice Johnson', email: 'alice@eduai.com', role: 'student'),
-  UserModel(id: 'student_2', name: 'Bob Smith', email: 'bob@eduai.com', role: 'student'),
-  UserModel(id: 'student_3', name: 'Carol Davis', email: 'carol@eduai.com', role: 'student'),
-  UserModel(id: 'student_4', name: 'David Lee', email: 'david@eduai.com', role: 'student'),
+  UserModel(id: 'student_1', name: 'Rashmi', email: 'rashmi@eduai.com', role: 'student'),
+  UserModel(id: 'student_2', name: 'Rishikesh', email: 'rishikesh@eduai.com', role: 'student'),
+  UserModel(id: 'student_3', name: 'Jyoti', email: 'jyoti@eduai.com', role: 'student'),
+  UserModel(id: 'student_4', name: 'Aditya', email: 'aditya@eduai.com', role: 'student'),
 ];

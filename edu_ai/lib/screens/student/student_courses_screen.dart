@@ -14,7 +14,8 @@ class StudentCoursesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser!;
-    final courses = context.watch<CourseProvider>().courses;
+    final courseProvider = context.watch<CourseProvider>();
+    final courses = courseProvider.courses;
     final progress = context.watch<ProgressProvider>();
 
     return Scaffold(
@@ -22,7 +23,9 @@ class StudentCoursesScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Courses'),
       ),
-      body: courses.isEmpty
+      body: courseProvider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : courses.isEmpty
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -48,7 +51,7 @@ class StudentCoursesScreen extends StatelessWidget {
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
               itemCount: courses.length,
               itemBuilder: (context, i) {
                 final course = courses[i];

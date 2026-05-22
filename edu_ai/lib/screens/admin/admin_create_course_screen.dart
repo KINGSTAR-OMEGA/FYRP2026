@@ -8,7 +8,9 @@ import '../../providers/course_provider.dart';
 import '../../utils/theme.dart';
 
 class AdminCreateCourseScreen extends StatefulWidget {
-  const AdminCreateCourseScreen({super.key});
+  final CourseModel? existingCourse;
+
+  const AdminCreateCourseScreen({super.key, this.existingCourse});
 
   @override
   State<AdminCreateCourseScreen> createState() =>
@@ -17,9 +19,9 @@ class AdminCreateCourseScreen extends StatefulWidget {
 
 class _AdminCreateCourseScreenState extends State<AdminCreateCourseScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _titleCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  String _category = 'General';
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _descCtrl;
+  late String _category;
   bool _saving = false;
 
   final _categories = [
@@ -34,6 +36,15 @@ class _AdminCreateCourseScreenState extends State<AdminCreateCourseScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final e = widget.existingCourse;
+    _titleCtrl = TextEditingController(text: e?.title ?? '');
+    _descCtrl = TextEditingController(text: e?.description ?? '');
+    _category = e?.category ?? 'General';
+  }
+
+  @override
   void dispose() {
     _titleCtrl.dispose();
     _descCtrl.dispose();
@@ -44,16 +55,27 @@ class _AdminCreateCourseScreenState extends State<AdminCreateCourseScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final course = CourseModel(
-      id: const Uuid().v4(),
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      category: _category,
-      lessons: [],
-      createdAt: DateTime.now(),
-    );
-
-    await context.read<CourseProvider>().addCourse(course);
+    final provider = context.read<CourseProvider>();
+    if (widget.existingCourse != null) {
+      // Update existing
+      final updated = widget.existingCourse!.copyWith(
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        category: _category,
+      );
+      await provider.updateCourse(updated);
+    } else {
+      // Create new
+      final course = CourseModel(
+        id: const Uuid().v4(),
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        category: _category,
+        lessons: [],
+        createdAt: DateTime.now(),
+      );
+      await provider.addCourse(course);
+    }
     if (!mounted) return;
     Navigator.pop(context);
   }
@@ -63,7 +85,7 @@ class _AdminCreateCourseScreenState extends State<AdminCreateCourseScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text('New Course'),
+        title: Text(widget.existingCourse != null ? 'Edit Course' : 'New Course'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -77,7 +99,7 @@ class _AdminCreateCourseScreenState extends State<AdminCreateCourseScreen> {
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation(Colors.white)),
                     )
-                  : const Text('Create'),
+                  : Text(widget.existingCourse != null ? 'Save Changes' : 'Create'),
             ),
           ),
         ],

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/chat_message_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/memory_provider.dart';
 import '../../providers/progress_provider.dart';
 import '../../services/ai_service.dart';
 import '../../utils/theme.dart';
@@ -63,6 +64,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
     if (text.isEmpty || _isThinking) return;
 
     final user = context.read<AuthProvider>().currentUser!;
+    final memory = context.read<MemoryProvider>().getMemory(user.id);
     final userMsg = ChatMessageModel(
       id: _uuid.v4(),
       role: 'user',
@@ -89,6 +91,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
       question: text,
       transcription: widget.transcription,
       history: history,
+      studentMemory: memory,
     );
 
     final aiMsg = ChatMessageModel(
@@ -173,7 +176,8 @@ class _AiChatPanelState extends State<AiChatPanel> {
 
           // Input
           Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.fromLTRB(
+                12, 12, 12, 12 + MediaQuery.of(context).padding.bottom),
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.border)),
               ),

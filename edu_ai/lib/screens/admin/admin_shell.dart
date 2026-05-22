@@ -39,7 +39,12 @@ class _AdminShellState extends State<AdminShell> {
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().currentUser!;
+    final user = context.watch<AuthProvider>().currentUser;
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     final isWide = MediaQuery.of(context).size.width > 900;
 
     if (isWide) {
@@ -64,7 +69,11 @@ class _AdminShellState extends State<AdminShell> {
     // Mobile: bottom nav + profile sheet
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: _screens[_index],
+      body: SafeArea(
+        bottom: false,
+        top: false,
+        child: _screens[_index],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
@@ -127,9 +136,9 @@ class _AdminShellState extends State<AdminShell> {
     );
   }
 
-  void _logout() {
-    Navigator.of(context).pop(); // close sheet if open
-    context.read<AuthProvider>().logout();
+  Future<void> _logout() async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
@@ -351,7 +360,7 @@ class _ProfileSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
-          24, 16, 24, 24 + MediaQuery.of(context).viewInsets.bottom),
+          24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
