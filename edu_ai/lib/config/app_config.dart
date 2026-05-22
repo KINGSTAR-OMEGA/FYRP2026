@@ -1,10 +1,10 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConfig {
   AppConfig._();
 
-  // Groq API Key. Provide this at build time using:
-  // flutter run --dart-define=GROQ_API_KEY=your_key_here
-  static const String grokApiKey =
-      String.fromEnvironment('GROQ_API_KEY', defaultValue: '');
+  // Groq API Key
+  static String get grokApiKey => dotenv.env['GROQ_API_KEY'] ?? '';
   static const String grokBaseUrl = 'https://api.groq.com/openai/v1';
   static const String grokChatModel = 'llama-3.3-70b-versatile';
 
