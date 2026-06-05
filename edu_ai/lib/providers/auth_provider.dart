@@ -93,8 +93,14 @@ class AuthProvider extends ChangeNotifier {
         displayName = simulateEmail.split('@').first.toUpperCase();
         displayName = displayName[0] + displayName.substring(1).toLowerCase();
         
-        // Use a persistent dummy UID based on email for the simulated session
-        uid = 'sim_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+        final collection = selectedRole == 'student' ? 'students' : 'teachers';
+        final query = await _db.collection(collection).where('email', isEqualTo: email).limit(1).get();
+        if (query.docs.isNotEmpty) {
+          uid = query.docs.first.id;
+        } else {
+          // Use a persistent dummy UID based on email for the simulated session
+          uid = 'sim_${email.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+        }
       } else {
         // Real Google Sign-In Flow
         final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();

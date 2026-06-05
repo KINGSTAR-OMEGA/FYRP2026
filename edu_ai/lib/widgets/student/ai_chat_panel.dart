@@ -15,6 +15,7 @@ class AiChatPanel extends StatefulWidget {
   final String lessonId;
   final String transcription;
   final List<ChatMessageModel> initialMessages;
+  final VoidCallback? onClose;
 
   const AiChatPanel({
     super.key,
@@ -22,6 +23,7 @@ class AiChatPanel extends StatefulWidget {
     required this.lessonId,
     required this.transcription,
     required this.initialMessages,
+    this.onClose,
   });
 
   @override
@@ -161,6 +163,11 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   ),
                 ),
                 const Spacer(),
+                if (widget.onClose != null)
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: widget.onClose,
+                  ),
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/progress_provider.dart';
 import '../../utils/theme.dart';
 import '../role_selection_screen.dart';
 import 'admin_dashboard_screen.dart';
@@ -35,6 +36,7 @@ class _AdminShellState extends State<AdminShell> {
   void initState() {
     super.initState();
     context.read<CourseProvider>().loadCourses();
+    context.read<ProgressProvider>().loadProgress();
   }
 
   @override
@@ -137,8 +139,39 @@ class _AdminShellState extends State<AdminShell> {
   }
 
   Future<void> _logout() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return PopScope(
+          canPop: false,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.bgSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
     await context.read<AuthProvider>().logout();
+    
     if (!mounted) return;
+    Navigator.pop(context); // Dismiss the loading dialog
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),

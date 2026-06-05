@@ -37,6 +37,7 @@ class LessonProgress {
   final List<PhaseResult> phaseResults;
   final List<ChatMessageModel> chatHistory;
   final DateTime lastWatched;
+  final int lookedAwayCount;
 
   const LessonProgress({
     required this.lessonId,
@@ -45,6 +46,7 @@ class LessonProgress {
     required this.phaseResults,
     required this.chatHistory,
     required this.lastWatched,
+    this.lookedAwayCount = 0,
   });
 
   Set<String> get completedPhaseIds => phaseResults.map((r) => r.phaseId).toSet();
@@ -60,6 +62,7 @@ class LessonProgress {
     List<PhaseResult>? phaseResults,
     List<ChatMessageModel>? chatHistory,
     DateTime? lastWatched,
+    int? lookedAwayCount,
   }) =>
       LessonProgress(
         lessonId: lessonId ?? this.lessonId,
@@ -68,6 +71,7 @@ class LessonProgress {
         phaseResults: phaseResults ?? this.phaseResults,
         chatHistory: chatHistory ?? this.chatHistory,
         lastWatched: lastWatched ?? this.lastWatched,
+        lookedAwayCount: lookedAwayCount ?? this.lookedAwayCount,
       );
 
   factory LessonProgress.fromJson(Map<String, dynamic> json) => LessonProgress(
@@ -81,6 +85,7 @@ class LessonProgress {
             .map((m) => ChatMessageModel.fromJson(m as Map<String, dynamic>))
             .toList(),
         lastWatched: DateTime.tryParse(json['lastWatched'] as String? ?? '') ?? DateTime.now(),
+        lookedAwayCount: json['lookedAwayCount'] as int? ?? 0,
       );
 
   Map<String, dynamic> toJson() => {
@@ -90,6 +95,7 @@ class LessonProgress {
         'phaseResults': phaseResults.map((r) => r.toJson()).toList(),
         'chatHistory': chatHistory.map((m) => m.toJson()).toList(),
         'lastWatched': lastWatched.toIso8601String(),
+        'lookedAwayCount': lookedAwayCount,
       };
 }
 

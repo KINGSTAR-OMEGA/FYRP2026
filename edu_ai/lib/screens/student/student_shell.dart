@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/progress_provider.dart';
 import '../../utils/theme.dart';
 import '../role_selection_screen.dart';
 import 'student_dashboard_screen.dart';
@@ -26,9 +27,10 @@ class _StudentShellState extends State<StudentShell> {
   @override
   void initState() {
     super.initState();
-    // Load courses for the student view — same as AdminShell does.
+    // Load courses and progress for the student view — same as AdminShell does.
     // Without this, courses are empty until an admin session has run first.
     context.read<CourseProvider>().loadCourses();
+    context.read<ProgressProvider>().loadProgress();
   }
 
   final _navItems = const [
@@ -137,8 +139,39 @@ class _StudentShellState extends State<StudentShell> {
   }
 
   Future<void> _logout() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return PopScope(
+          canPop: false,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.bgSurface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
     await context.read<AuthProvider>().logout();
+    
     if (!mounted) return;
+    Navigator.pop(context); // Dismiss the loading dialog
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),

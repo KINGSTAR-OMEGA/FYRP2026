@@ -134,7 +134,7 @@ class AdminDashboardScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                             builder: (_) =>
-                                const AdminStudentAnalyticsScreen()),
+                                AdminStudentAnalyticsScreen(initialStudent: s)),
                       ),
                     )),
               ]),

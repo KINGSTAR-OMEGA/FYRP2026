@@ -6,6 +6,7 @@ class StudentMemoryModel {
   final String preferredPace; // 'slow' | 'normal' | 'fast'
   final Map<String, double> topicScores; // topic → 0.0–1.0 accuracy
   final List<String> confusionPoints;
+  final Map<String, String> aiReviews; // phaseTitle/ID -> AI Review Text
   final int totalQuestionsAttempted;
   final int totalCorrect;
   final DateTime lastUpdated;
@@ -18,6 +19,7 @@ class StudentMemoryModel {
     required this.preferredPace,
     required this.topicScores,
     required this.confusionPoints,
+    required this.aiReviews,
     required this.totalQuestionsAttempted,
     required this.totalCorrect,
     required this.lastUpdated,
@@ -34,6 +36,7 @@ class StudentMemoryModel {
         preferredPace: 'normal',
         topicScores: const {},
         confusionPoints: const [],
+        aiReviews: const {},
         totalQuestionsAttempted: 0,
         totalCorrect: 0,
         lastUpdated: DateTime.now(),
@@ -50,6 +53,8 @@ class StudentMemoryModel {
             .map((k, v) => MapEntry(k, (v as num).toDouble())),
         confusionPoints:
             List<String>.from(json['confusionPoints'] as List? ?? []),
+        aiReviews: (json['aiReviews'] as Map<String, dynamic>? ?? {})
+            .map((k, v) => MapEntry(k, v as String)),
         totalQuestionsAttempted:
             json['totalQuestionsAttempted'] as int? ?? 0,
         totalCorrect: json['totalCorrect'] as int? ?? 0,
@@ -66,6 +71,7 @@ class StudentMemoryModel {
         'preferredPace': preferredPace,
         'topicScores': topicScores,
         'confusionPoints': confusionPoints,
+        'aiReviews': aiReviews,
         'totalQuestionsAttempted': totalQuestionsAttempted,
         'totalCorrect': totalCorrect,
         'lastUpdated': lastUpdated.toIso8601String(),
@@ -78,6 +84,7 @@ class StudentMemoryModel {
     String? preferredPace,
     Map<String, double>? topicScores,
     List<String>? confusionPoints,
+    Map<String, String>? aiReviews,
     int? totalQuestionsAttempted,
     int? totalCorrect,
     DateTime? lastUpdated,
@@ -90,6 +97,7 @@ class StudentMemoryModel {
         preferredPace: preferredPace ?? this.preferredPace,
         topicScores: topicScores ?? Map.from(this.topicScores),
         confusionPoints: confusionPoints ?? List.from(this.confusionPoints),
+        aiReviews: aiReviews ?? Map.from(this.aiReviews),
         totalQuestionsAttempted:
             totalQuestionsAttempted ?? this.totalQuestionsAttempted,
         totalCorrect: totalCorrect ?? this.totalCorrect,

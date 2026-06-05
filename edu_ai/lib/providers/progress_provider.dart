@@ -52,16 +52,24 @@ class ProgressProvider extends ChangeNotifier {
     return getProgress(studentId, courseId).isLessonCompleted(previousId);
   }
 
+  // Keep track of the last time we wrote to Firestore for each student_course key
+  final Map<String, DateTime> _lastSaveTimes = {};
+
   Future<void> updateWatchPosition(
-      String studentId, String courseId, String lessonId, double seconds) async {
+      String studentId, String courseId, String lessonId, double seconds, {bool force = false}) async {
     final p = getLessonProgress(studentId, courseId, lessonId);
-    await _updateLesson(studentId, courseId, p.copyWith(watchedSeconds: seconds, lastWatched: DateTime.now()));
+    await _updateLesson(
+      studentId,
+      courseId,
+      p.copyWith(watchedSeconds: seconds, lastWatched: DateTime.now()),
+      forceSave: force,
+    );
   }
 
   Future<void> completeLesson(
       String studentId, String courseId, String lessonId) async {
     final p = getLessonProgress(studentId, courseId, lessonId);
-    await _updateLesson(studentId, courseId, p.copyWith(isCompleted: true));
+    await _updateLesson(studentId, courseId, p.copyWith(isCompleted: true), forceSave: true);
   }
 
   Future<void> recordPhaseResult(
@@ -69,25 +77,53 @@ class ProgressProvider extends ChangeNotifier {
     final p = getLessonProgress(studentId, courseId, lessonId);
     final existing = p.phaseResults.where((r) => r.phaseId != result.phaseId).toList();
     await _updateLesson(
-        studentId, courseId, p.copyWith(phaseResults: [...existing, result]));
+      studentId,
+      courseId,
+      p.copyWith(phaseResults: [...existing, result]),
+      forceSave: true,
+    );
   }
 
   Future<void> addChatMessage(
       String studentId, String courseId, String lessonId, ChatMessageModel msg) async {
     final p = getLessonProgress(studentId, courseId, lessonId);
     await _updateLesson(
-        studentId, courseId, p.copyWith(chatHistory: [...p.chatHistory, msg]));
+      studentId,
+      courseId,
+      p.copyWith(chatHistory: [...p.chatHistory, msg]),
+      forceSave: true,
+    );
+  }
+
+  Future<void> incrementLookedAwayCount(
+      String studentId, String courseId, String lessonId) async {
+    final p = getLessonProgress(studentId, courseId, lessonId);
+    await _updateLesson(
+      studentId,
+      courseId,
+      p.copyWith(lookedAwayCount: p.lookedAwayCount + 1),
+      forceSave: true,
+    );
   }
 
   Future<void> _updateLesson(
-      String studentId, String courseId, LessonProgress lp) async {
+      String studentId, String courseId, LessonProgress lp, {bool forceSave = false}) async {
     final key = _key(studentId, courseId);
     final existing = _progressMap[key] ??
         StudentCourseProgress(studentId: studentId, courseId: courseId, lessonProgressMap: {});
     final newMap = Map<String, LessonProgress>.from(existing.lessonProgressMap)
       ..[lp.lessonId] = lp;
     _progressMap[key] = existing.copyWith(lessonProgressMap: newMap);
-    await _storage.saveProgress(_progressMap);
+    
+    final now = DateTime.now();
+    final lastSave = _lastSaveTimes[key];
+    
+    if (forceSave || lastSave == null || now.difference(lastSave).inSeconds >= 10) {
+      _lastSaveTimes[key] = now;
+      // Save only this student/course progress entry to avoid writing the entire map
+      _storage.saveProgress({key: _progressMap[key]!});
+    }
+    
     notifyListeners();
   }
 

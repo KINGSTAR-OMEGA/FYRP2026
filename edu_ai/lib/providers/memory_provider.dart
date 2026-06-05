@@ -79,4 +79,16 @@ class MemoryProvider extends ChangeNotifier {
       confusionPoints: mergedConfusion,
     ));
   }
+
+  /// Saves an AI generated performance review/insight for a phase
+  Future<void> recordAiReview({
+    required String studentId,
+    required String phaseTitle,
+    required String review,
+  }) async {
+    final mem = getMemory(studentId);
+    final updatedReviews = Map<String, String>.from(mem.aiReviews)
+      ..[phaseTitle] = review;
+    await saveMemory(mem.copyWith(aiReviews: updatedReviews));
+  }
 }

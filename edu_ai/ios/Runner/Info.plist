@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access for eye tracking and auto-pausing video lessons when you look away.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app requires microphone access for audio/video lesson interactions.</string>
 </dict>
 </plist>
